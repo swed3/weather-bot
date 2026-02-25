@@ -1,67 +1,32 @@
-from engine.trade_decision import TradeDecision
-
-
 class PaperTrader:
 
     def __init__(self, bankroll=1000):
         self.bankroll = bankroll
-        self.position = 0
-        self.entry_price = None
 
-    def execute(self, blended_prob, market_price):
+    def place_trade(self, side, price, stake):
 
-        decision = TradeDecision.evaluate(
-            blended_prob,
-            market_price
-        )
+        if stake > self.bankroll:
+            return {
+                "status": "REJECTED",
+                "reason": "Insufficient bankroll"
+            }
 
-        if decision["trade"]:
+        self.bankroll -= stake
 
-            if decision["side"] == "BUY":
+        print(f"\n{side} executed at price {price}")
+        print(f"Stake: {stake}")
+        print(f"Remaining bankroll: {self.bankroll}")
 
-                stake = self.bankroll * 0.1  # 10% position sizing
-                self.position += stake
-                self.entry_price = market_price
-                self.bankroll -= stake
+        # For now assume trade settles immediately (demo mode)
+        pnl = 0
 
-                print(f"BUY executed at {market_price}")
-                print(f"Stake: {stake}")
-                print(f"Remaining bankroll: {self.bankroll}")
+        self.bankroll += stake + pnl
 
-            elif decision["side"] == "SELL":
-
-                print("SELL signal detected (short simulation not enabled)")
-
-        else:
-            print("No trade")
-
-    def settle(self, outcome_yes):
-
-        if self.position == 0:
-            print("No open position")
-            return
-
-        if outcome_yes:
-            payout = self.position * 1
-        else:
-            payout = 0
-
-        pnl = payout - self.position
-        self.bankroll += payout
-        self.position = 0
-
-        print(f"Trade settled. PnL: {pnl}")
-        print(f"New bankroll: {self.bankroll}")
-
-
-if __name__ == "__main__":
-
-    blended_probability = 0.8847
-    market_price = 0.82
-
-    trader = PaperTrader()
-
-    trader.execute(blended_probability, market_price)
-
-    # simulate YES outcome
-    trader.settle(outcome_yes=True)
+        return {
+            "status": "FILLED",
+            "side": side,
+            "price": price,
+            "stake": stake,
+            "pnl": pnl,
+            "new_bankroll": self.bankroll
+        }

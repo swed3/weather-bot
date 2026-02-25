@@ -1,11 +1,10 @@
-import os
 import requests
-from dotenv import load_dotenv
+import os
 
-load_dotenv()
-
-TOKEN = os.getenv("NOAA_TOKEN")
 BASE_URL = "https://www.ncdc.noaa.gov/cdo-web/api/v2/data"
+
+# Put your NOAA API token here or use environment variable
+TOKEN = os.getenv("NOAA_TOKEN", "mVSjiXoEDhVINmPqWgVEiHqnzBWoJXxb")
 
 
 class NOAAHistoricalFetcher:
@@ -14,6 +13,7 @@ class NOAAHistoricalFetcher:
         self.station_id = station_id
 
     def fetch_feb26_history(self, start_year=2011, end_year=2025):
+
         headers = {"token": TOKEN}
         temps = []
 
@@ -31,16 +31,37 @@ class NOAAHistoricalFetcher:
                 "limit": 1000
             }
 
-            response = requests.get(BASE_URL, headers=headers, params=params)
+            try:
+                response = requests.get(
+                    BASE_URL,
+                    headers=headers,
+                    params=params,
+                    timeout=10
+                )
 
-            if response.status_code != 200:
-                print("Error:", response.status_code, response.text)
+                if response.status_code != 200:
+                    print(f"NOAA API unavailable for {year}")
+                    print("Status Code:", response.status_code)
+                    continue
+
+                data = response.json()
+
+                if "results" in data and len(data["results"]) > 0:
+                    temps.append(data["results"][0]["value"])
+                else:
+                    print(f"No data available for {year}")
+
+            except requests.exceptions.Timeout:
+                print(f"Timeout fetching data for {year}")
                 continue
 
-            data = response.json()
+            except requests.exceptions.RequestException as e:
+                print(f"Network error for {year}: {e}")
+                continue
 
-            if "results" in data and len(data["results"]) > 0:
-                temps.append(data["results"][0]["value"])
+        if len(temps) == 0:
+            print("WARNING: No historical data fetched.")
+            return []
 
         return temps
 
@@ -52,5 +73,5 @@ if __name__ == "__main__":
     fetcher = NOAAHistoricalFetcher(station)
     temps = fetcher.fetch_feb26_history()
 
-    print("Feb 26 Historical TMAX (°F):")
+    print("\nFeb 26 Historical TMAX (°F):")
     print(temps)
