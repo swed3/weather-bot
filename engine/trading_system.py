@@ -8,7 +8,6 @@ class TradingSystem:
 
     def __init__(self, station_id, bankroll=1000):
         self.station_id = station_id
-        self.bankroll = bankroll
 
         self.edge_threshold = 0.05
         self.kelly_fraction = 0.5
@@ -32,7 +31,6 @@ class TradingSystem:
         bucket = signal["bucket"]
         edge = signal["edge"]
         market_price = market_prices[bucket]
-
         model_prob = market_price + edge
 
         stake = self.kelly.calculate_bet_size(
@@ -81,7 +79,4 @@ if __name__ == "__main__":
     }
 
     system = TradingSystem(station, bankroll=1000)
-
-    # Run multiple times to simulate multiple trades
-    for _ in range(5):
-        system.run(market_prices)
+    system.run(market_prices)
