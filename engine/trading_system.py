@@ -1,82 +1,79 @@
 from engine.auto_trade import AutoTradeDecision
 from engine.kelly_engine import KellyEngine
 from execution.paper_trader import PaperTrader
+from engine.settlement_engine import SettlementEngine
 from performance.metrics import PerformanceTracker
 
 
 class TradingSystem:
 
-    def __init__(self, station_id, bankroll=1000):
-        self.station_id = station_id
+    def __init__(self):
 
-        self.edge_threshold = 0.05
-        self.kelly_fraction = 0.5
+        self.auto = AutoTradeDecision(station_id="NYC")
+        self.kelly = KellyEngine()
+        self.paper = PaperTrader()
+        self.settlement = SettlementEngine()
+        self.performance = PerformanceTracker()
 
-        self.trader = AutoTradeDecision(station_id, self.edge_threshold)
-        self.kelly = KellyEngine(self.kelly_fraction)
-        self.paper = PaperTrader(bankroll)
-        self.performance = PerformanceTracker(bankroll)
+    def run(self, market_prices, actual_temp):
 
-    def run(self, market_prices):
+        print("=== Running Trading System ===")
 
-        print("\n=== Running Trading System ===")
-
-        signal = self.trader.generate_signal(market_prices)
+        signal = self.auto.generate_signal(market_prices)
         print("Signal:", signal)
 
-        if not signal["trade"]:
-            print("No trade executed.")
+        if not signal.get("trade"):
+            print("No trade.")
             return
 
-        bucket = signal["bucket"]
-        edge = signal["edge"]
-        market_price = market_prices[bucket]
-        model_prob = market_price + edge
+        price = market_prices[signal["bucket"]]
 
-        stake = self.kelly.calculate_bet_size(
-            model_prob=model_prob,
-            market_price=market_price,
-            bankroll=self.paper.bankroll
+        stake = self.kelly.calculate_stake(
+            edge=signal["edge"],
+            bankroll=self.paper.bankroll,
+            price=price
         )
 
-        print("Recommended Stake:", stake)
+        print("Recommended Stake:", round(stake, 2))
 
-        if stake <= 0:
-            print("Stake is zero. No trade.")
-            return
-
-        result = self.paper.place_trade(
-            side="BUY",
-            price=market_price,
+        trade_result = self.paper.execute_trade(
+            side=signal["side"],
+            price=price,
             stake=stake
         )
 
-        pnl = result["pnl"]
-        new_bankroll = result["new_bankroll"]
-
-        self.performance.record_trade(stake, pnl, new_bankroll)
-
         print("\nPaper Trade Result:")
-        print(result)
+        print(trade_result)
 
-        self.performance.summary()
+        settlement_result = self.settlement.settle_trade(
+            trade={
+                "side": signal["side"],
+                "bucket": signal["bucket"],
+                "price": price,
+                "stake": stake
+            },
+            actual_temp=actual_temp
+        )
+
+        print("\nSettlement Result:")
+        print(settlement_result)
+
+        self.paper.bankroll += settlement_result["profit"]
+
+        self.performance.record_trade(settlement_result["profit"])
+
+        print("\nUpdated Bankroll:", round(self.paper.bankroll, 2))
+
+        print("\n===== PERFORMANCE SUMMARY =====")
+        print(self.performance.summary())
 
 
 if __name__ == "__main__":
 
-    station = "GHCND:USW00094728"
-
     market_prices = {
-        "≤33": 0.20,
-        "34-35": 0.05,
-        "36-37": 0.10,
-        "38-39": 0.08,
-        "40-41": 0.04,
-        "42-43": 0.06,
-        "44-45": 0.25,
-        "46-47": 0.05,
-        "≥48": 0.22,
+        "≥48": 0.22
     }
 
-    system = TradingSystem(station, bankroll=1000)
-    system.run(market_prices)
+    system = TradingSystem()
+
+    system.run(market_prices, actual_temp=52)
