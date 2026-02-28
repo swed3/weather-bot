@@ -1,4 +1,4 @@
-import random
+nano engine/risk_engine.pyimport random
 from weather.fetch_noaa import fetch_historical_tmax
 from engine.range_model import RangeProbabilityModel
 from engine.auto_trade import AutoTradeDecision
