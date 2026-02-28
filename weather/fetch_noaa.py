@@ -1,65 +1,101 @@
 import requests
 from datetime import datetime
 
-class NOAAHistoricalFetcher:
+# ===============================
+# CONFIG
+# ===============================
 
-    def __init__(self):
-        # Central Park NYC Official Station
-        self.station_id = "USW00094728"
-        self.base_url = "https://www.ncei.noaa.gov/cdo-web/api/v2/data"
-        self.token = "mVSjiXoEDhVINmPqWgVEiHqnzBWoJXxb"
+STATION_ID = "USW00094728"   # NYC Central Park
+BASE_URL = "https://www.ncei.noaa.gov/access/services/data/v1"
 
-    def fetch_feb_26_history(self, start_year=2010, end_year=2024):
 
-        historical_temps = []
+# ===============================
+# INTERNAL NOAA FETCH
+# ===============================
 
-        for year in range(start_year, end_year + 1):
+def fetch_noaa_history(month, day, start_year=2010, end_year=None):
+    """
+    Fetch historical Tmax for NYC for given month/day
+    """
 
-            date_str = f"{year}-02-26"
+    if end_year is None:
+        end_year = datetime.now().year - 1
 
-            params = {
-                "datasetid": "GHCND",
-                "stationid": f"GHCND:{self.station_id}",
-                "startdate": date_str,
-                "enddate": date_str,
-                "datatypeid": "TMAX",
-                "units": "standard",
-                "limit": 1000
-            }
+    temps = []
 
-            headers = {
-                "token": self.token
-            }
+    for year in range(start_year, end_year + 1):
 
-            try:
-                response = requests.get(self.base_url, params=params, headers=headers, timeout=10)
+        start_date = f"{year}-{month:02d}-{day:02d}"
+        end_date = start_date
 
-                if response.status_code != 200:
-                    print(f"No data available for {year}")
-                    continue
+        params = {
+            "dataset": "daily-summaries",
+            "stations": STATION_ID,
+            "startDate": start_date,
+            "endDate": end_date,
+            "dataTypes": "TMAX",
+            "units": "standard",
+            "format": "json"
+        }
 
-                data = response.json()
+        try:
+            response = requests.get(BASE_URL, params=params, timeout=15)
 
-                if "results" not in data:
-                    print(f"No results for {year}")
-                    continue
-
-                temp = data["results"][0]["value"]
-                historical_temps.append(temp)
-
-            except Exception as e:
-                print(f"Error fetching {year}: {e}")
+            if response.status_code != 200:
                 continue
 
-        return historical_temps
+            data = response.json()
+
+            if not data:
+                continue
+
+            value = data[0].get("TMAX")
+
+            if value is not None:
+                temps.append(value)
+
+        except Exception:
+            continue
+
+    return temps
 
 
-# ---- Test Block ----
+# ===============================
+# ✅ SAFE EXPORT FUNCTION
+# ===============================
+
+def fetch_historical_tmax(month=2, day=26):
+    """
+    Cleaned historical Tmax values
+    Used by:
+    - Range Model
+    - Backtester
+    - Edge Engine
+    """
+
+    print("Fetching NOAA historical temperatures...")
+
+    raw_data = fetch_noaa_history(month, day)
+
+    cleaned = []
+
+    for temp in raw_data:
+        try:
+            cleaned.append(float(temp))
+        except:
+            continue
+
+    if not cleaned:
+        print("WARNING: All historical values invalid.")
+
+    return cleaned
+
+
+# ===============================
+# TEST RUN
+# ===============================
+
 if __name__ == "__main__":
-
-    fetcher = NOAAHistoricalFetcher()
-
-    temps = fetcher.fetch_feb_26_history()
-
-    print("\nFeb 26 Historical TMAX (°F):")
-    print(temps)
+    data = fetch_historical_tmax()
+    print("\nHistorical Tmax:")
+    print(data)
